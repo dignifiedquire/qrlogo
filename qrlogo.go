@@ -3,7 +3,7 @@ package qrlogo
 import (
 	"bytes"
 	"image"
-	"image/color"
+	"image/draw"
 	"image/png"
 
 	qr "github.com/skip2/go-qrcode"
@@ -38,9 +38,13 @@ func (e Encoder) Encode(str string, logo image.Image, size int) (*bytes.Buffer, 
 	}
 
 	img := code.Image(size)
-	e.overlayLogo(img, logo)
+	bounds := img.Bounds()
+	dst := image.NewRGBA(bounds)
 
-	err = png.Encode(&buf, img)
+	draw.Draw(dst, bounds, img, bounds.Min, draw.Over)
+	e.overlayLogo(dst, logo)
+
+	err = png.Encode(&buf, dst)
 	if err != nil {
 		return nil, err
 	}
@@ -49,20 +53,11 @@ func (e Encoder) Encode(str string, logo image.Image, size int) (*bytes.Buffer, 
 }
 
 // overlayLogo blends logo to the center of the QR code,
-// changing all colors to black.
 func (e Encoder) overlayLogo(dst, src image.Image) {
-	grey := uint32(^uint16(0)) * uint32(e.GreyThreshold) / 100
-	alphaOffset := uint32(e.AlphaThreshold)
 	offset := dst.Bounds().Max.X/2 - src.Bounds().Max.X/2
 	for x := 0; x < src.Bounds().Max.X; x++ {
 		for y := 0; y < src.Bounds().Max.Y; y++ {
-			if r, g, b, alpha := src.At(x, y).RGBA(); alpha > alphaOffset {
-				col := color.Black
-				if r > grey && g > grey && b > grey {
-					col = color.White
-				}
-				dst.(*image.Paletted).Set(x+offset, y+offset, col)
-			}
+			dst.(*image.RGBA).Set(x+offset, y+offset, src.At(x, y))
 		}
 	}
 }
